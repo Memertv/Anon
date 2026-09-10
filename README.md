@@ -12,11 +12,51 @@ Traditional helpdesk systems route tickets based on static, user-selected fields
 **The Solution:**
 Instead of waiting 8 hours to realize a ticket is complex, this application utilizes a **Hybrid NLP + XGBoost Pipeline**. It analyzes the actual terminology in the user's `Issue_Description` combined with categorical metadata. It calculates a real-time probability of delay and uses Cost-Sensitive Learning to trigger an immediate escalation to Senior Technicians.
 
+---
+
+## 🧹 Data Cleaning & Target Engineering Methodology
+To transition from a skewed regression problem to a robust classification task, the data underwent the following preparation steps:
+1. **Target Discretization:** The heavily skewed continuous variable `Resolution_Time_Hrs` was bucketed into clear operational classes. Tickets resolved in under 8 hours were labeled **"Fast"**, while those taking longer were labeled **"Medium/Delayed"**.
+2. **Text Processing:** The raw `Issue_Description` text was standardized, stop words were removed, and the text was converted into numerical arrays using TF-IDF (Term Frequency-Inverse Document Frequency) vectorization.
+3. **Hybrid Concatenation:** The vectorized text features were joined with One-Hot Encoded categorical variables (`User_Type`, `Priority`, `Unit_Dept`, `Issue_Category`) to form a complete predictive matrix.
+
+---
+
+## 📊 Model Evaluation & Results
+We trained two models to prove the efficacy of the advanced architecture. 
+
+### 1. The Baseline Model (Random Forest)
+Trained purely on categorical metadata (Priority, Category, Department).
+*   **Accuracy:** 55%
+*   **Insight:** Relying only on standard intake fields is basically a coin flip. The model misses many complex issues because users frequently mis-categorize their problems.
+
+<img src="assets/baseline_cm.png" alt="Baseline Confusion Matrix" width="400"/>
+
+### 2. The Advanced Model (NLP + XGBoost + Cost-Sensitive Learning)
+Trained on the Hybrid TF-IDF feature set. We implemented **Cost-Sensitive Learning** (penalizing false negatives) to aggressively protect SLAs.
+*   **Accuracy:** 51%
+*   **Recall (Delayed Tickets):** 67%
+*   **Insight:** While overall accuracy dropped slightly due to more "false alarms", the recall for delayed tickets skyrocketed. In a helpdesk environment, escalating a simple issue early (False Positive) is much cheaper than letting a complex issue sit untouched for 8 hours (False Negative).
+
+<img src="assets/advanced_cm.png" alt="Advanced Confusion Matrix" width="400"/>
+
+### Full Evaluation Metrics (Advanced Model)
+| Metric | Score | Description |
+| :--- | :--- | :--- |
+| **AUC** | 0.521 | Area Under the ROC Curve |
+| **Accuracy (CA)** | 0.510 | Classification Accuracy |
+| **F1 Score** | 0.559 | Harmonic mean of Precision and Recall |
+| **Precision** | 0.477 | Ratio of correct positive predictions |
+| **Recall** | 0.674 | Ability to find all delayed tickets (SLA Protection) |
+| **MCC** | 0.046 | Matthews Correlation Coefficient |
+
+---
+
 ## 🧠 Architecture
 This project is decoupled into production-ready layers:
-*   `train_and_save.py`: The model pipeline builder. Uses `TfidfVectorizer` to extract text features, merges them with One-Hot Encoded categorical variables, and trains an `XGBClassifier`. The model uses custom class weighting to heavily penalize false negatives (missed delayed tickets) to protect SLAs.
-*   `predictor.py`: The inference service layer. Handles model serialization and provides a lightweight Explainable AI (XAI) feature to map high-risk vocabulary back to the user's text.
-*   `app.py`: The interactive Streamlit frontend. Provides the "Live Triage Simulator" and the "Executive Impact Dashboard".
+*   `train_and_save.py`: The model pipeline builder. 
+*   `predictor.py`: The inference service layer. Handles model serialization and provides lightweight Explainable AI (XAI).
+*   `app.py`: The interactive Streamlit frontend. 
 
 ## 💻 Running Locally
 
@@ -32,25 +72,15 @@ Make sure you have Python 3.8+ installed.
    ```bash
    pip install -r requirements.txt
    ```
-3. (Optional) Re-train the model if needed:
-   ```bash
-   python train_and_save.py
-   ```
-4. Launch the Streamlit application:
+3. Launch the Streamlit application:
    ```bash
    streamlit run app.py
    ```
-5. Open your browser to `http://localhost:8501`.
-
-## 📊 Presentation Features
-This application is built for live demonstration to judging panels:
-*   **Live Simulator**: Type in mock issues and watch the probability gauge react in real-time.
-*   **One-Click Presets**: Use the "Baseline" and "Deceptive Ticket" buttons for flawless live pitches without typing.
-*   **Explainable AI**: The app explicitly highlights the exact words (e.g., "portal", "gateway", "down") that triggered the model's alert.
-*   **Executive Impact Calculator**: Translates raw machine learning metrics into projected business value (e.g., "Net Operational Hours Saved" per 1,000 tickets).
+4. Open your browser to `http://localhost:8501`.
 
 ## 📄 Repository Structure
-*   `/app_data/` - Contains the serialized `.pkl` pipeline and exported evaluation CSVs.
+*   `assets/` - Confusion matrix charts and images.
+*   `app_data/` - Contains the serialized `.pkl` pipeline and exported evaluation CSVs.
 *   `app.py` - Main Streamlit UI.
 *   `predictor.py` - Decoupled inference engine.
 *   `train_and_save.py` - Model training script.

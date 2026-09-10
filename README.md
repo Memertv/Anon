@@ -38,8 +38,16 @@ We trained two distinct models to prove the efficacy of our advanced NLP archite
 
 ### 1. The Baseline Model (Random Forest)
 Trained purely on categorical metadata (Priority, Category, Department).
-*   **Accuracy:** ~55%
 *   **Insight:** Relying only on standard intake fields is basically a coin flip. The model misses many complex issues because users frequently mis-categorize their problems.
+
+| Metric | Score | Description |
+| :--- | :--- | :--- |
+| **AUC** | 0.557 | Area Under the ROC Curve |
+| **Accuracy (CA)** | 0.550 | Classification Accuracy |
+| **F1 Score** | 0.545 | Harmonic mean of Precision and Recall |
+| **Precision** | 0.509 | Ratio of correct positive predictions |
+| **Recall** | 0.587 | Ability to find all delayed tickets |
+| **MCC** | 0.105 | Matthews Correlation Coefficient |
 
 <img src="assets/baseline_cm.png" alt="Baseline Confusion Matrix" width="400"/>
 

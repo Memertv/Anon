@@ -6,37 +6,48 @@
 
 An interactive, AI-driven decision support system designed for the **FUNAAB ICTREC Helpdesk**. This application uses Natural Language Processing (NLP) and Cost-Sensitive Machine Learning to instantly predict if a newly submitted helpdesk ticket will breach Service Level Agreements (SLAs), allowing for proactive "Minute-1 Escalation."
 
-## 🚀 The Problem & Solution
-Traditional helpdesk systems route tickets based on static, user-selected fields (like "Priority" or "Category"). Our research on historical ICTREC instances revealed that these static fields only predict resolution time with **~55% accuracy**. A user might mark an issue as "Low Priority," but the actual underlying complexity could take days to resolve.
+---
 
-**The Solution:**
-Instead of waiting 8 hours to realize a ticket is complex, this application utilizes a **Hybrid NLP + XGBoost Pipeline**. It analyzes the actual terminology in the user's `Issue_Description` combined with categorical metadata. It calculates a real-time probability of delay and uses Cost-Sensitive Learning to trigger an immediate escalation to Senior Technicians.
+## 🔍 Phase I: Data Discovery & Exploration
+Before building any predictive models, we needed to deeply understand the historical behavior of the helpdesk queue. We analyzed 500 historical ticket instances.
+
+### The Resolution Time Problem
+Traditional helpdesk systems route tickets based on static, user-selected fields (like "Priority" or "Category"). However, our analysis of `Resolution_Time_Hrs` revealed a heavily right-skewed distribution. 
+
+<img src="assets/resolution_dist.png" alt="Distribution of Resolution Times" width="500"/>
+
+**Key Finding:** The median resolution time is just 2.0 hours. The vast majority of tickets are solved quickly. However, a massive "long tail" of complex tickets stretches outwards, causing significant SLA breaches. Relying purely on a user selecting "High Priority" failed to accurately predict these complex, long-tail issues.
+
+### Ticket Volume by Category
+<img src="assets/issue_cat_dist.png" alt="Issue Category Breakdown" width="600"/>
 
 ---
 
-## 🧹 Data Cleaning & Target Engineering Methodology
-To transition from a skewed regression problem to a robust classification task, the data underwent the following preparation steps:
-1. **Target Discretization:** The heavily skewed continuous variable `Resolution_Time_Hrs` was bucketed into clear operational classes. Tickets resolved in under 8 hours were labeled **"Fast"**, while those taking longer were labeled **"Medium/Delayed"**.
-2. **Text Processing:** The raw `Issue_Description` text was standardized, stop words were removed, and the text was converted into numerical arrays using TF-IDF (Term Frequency-Inverse Document Frequency) vectorization.
-3. **Hybrid Concatenation:** The vectorized text features were joined with One-Hot Encoded categorical variables (`User_Type`, `Priority`, `Unit_Dept`, `Issue_Category`) to form a complete predictive matrix.
+## 🧹 Phase II: Data Cleaning & Target Engineering
+Because predicting exact continuous hours on a heavily skewed dataset is mathematically volatile, we transformed the problem from **Regression** to **Classification**.
+
+1. **Target Discretization:** We bucketed `Resolution_Time_Hrs` into operational Service Level Agreements (SLAs). Tickets resolved in under 8 hours were labeled **"Fast"**, while those taking longer were labeled **"Medium (8 hrs - 1 week)"**.
+2. **Text Processing:** The raw `Issue_Description` text was standardized and converted into numerical arrays using TF-IDF (Term Frequency-Inverse Document Frequency) vectorization.
+
+<img src="assets/target_balance.png" alt="Target Class Balance" width="500"/>
 
 ---
 
-## 📊 Model Evaluation & Results
-We trained two models to prove the efficacy of the advanced architecture. 
+## 📊 Phase III: Predictive Modeling
+We trained two distinct models to prove the efficacy of our advanced NLP architecture.
 
 ### 1. The Baseline Model (Random Forest)
 Trained purely on categorical metadata (Priority, Category, Department).
-*   **Accuracy:** 55%
+*   **Accuracy:** ~55%
 *   **Insight:** Relying only on standard intake fields is basically a coin flip. The model misses many complex issues because users frequently mis-categorize their problems.
 
 <img src="assets/baseline_cm.png" alt="Baseline Confusion Matrix" width="400"/>
 
 ### 2. The Advanced Model (NLP + XGBoost + Cost-Sensitive Learning)
-Trained on the Hybrid TF-IDF feature set. We implemented **Cost-Sensitive Learning** (penalizing false negatives) to aggressively protect SLAs.
-*   **Accuracy:** 51%
-*   **Recall (Delayed Tickets):** 67%
-*   **Insight:** While overall accuracy dropped slightly due to more "false alarms", the recall for delayed tickets skyrocketed. In a helpdesk environment, escalating a simple issue early (False Positive) is much cheaper than letting a complex issue sit untouched for 8 hours (False Negative).
+Trained on the **Hybrid Feature Set** (TF-IDF Text Vectors + Categorical Metadata). We implemented **Cost-Sensitive Learning** (penalizing false negatives) to aggressively protect SLAs.
+*   **Accuracy:** 51.0%
+*   **Recall (Delayed Tickets):** **67.4%**
+*   **Insight:** While overall accuracy dropped slightly due to more "false alarms", the recall (ability to catch delayed tickets) skyrocketed. In a helpdesk environment, escalating a simple issue early (False Positive) is much cheaper than letting a complex issue sit untouched for 8 hours (False Negative).
 
 <img src="assets/advanced_cm.png" alt="Advanced Confusion Matrix" width="400"/>
 
@@ -52,15 +63,17 @@ Trained on the Hybrid TF-IDF feature set. We implemented **Cost-Sensitive Learni
 
 ---
 
-## 🧠 Architecture
-This project is decoupled into production-ready layers:
-*   `train_and_save.py`: The model pipeline builder. 
-*   `predictor.py`: The inference service layer. Handles model serialization and provides lightweight Explainable AI (XAI).
-*   `app.py`: The interactive Streamlit frontend. 
+## ⚙️ Phase IV: Operational Architecture
+This project is decoupled into production-ready layers for real-time inference.
+*   `train_and_save.py`: The model pipeline builder. It trains and serializes the complete NLP+XGBoost Pipeline into `app_data/triage_model.pkl`.
+*   `predictor.py`: The decoupled inference service layer. Handles model loading and provides a lightweight **Explainable AI (XAI)** function that maps high-risk vocabulary back to the user's text to show *why* an escalation occurred.
+*   `app.py`: The interactive Streamlit frontend housing the Live Simulator and the Executive Impact Dashboard.
 
-## 💻 Running Locally
+---
 
-### Prerequisites
+## 💻 Phase V: Usage & Deployment
+
+### Running the Live Simulator Locally
 Make sure you have Python 3.8+ installed.
 
 1. Clone the repository:
@@ -78,11 +91,9 @@ Make sure you have Python 3.8+ installed.
    ```
 4. Open your browser to `http://localhost:8501`.
 
-## 📄 Repository Structure
-*   `assets/` - Confusion matrix charts and images.
-*   `app_data/` - Contains the serialized `.pkl` pipeline and exported evaluation CSVs.
-*   `app.py` - Main Streamlit UI.
-*   `predictor.py` - Decoupled inference engine.
-*   `train_and_save.py` - Model training script.
-*   `requirements.txt` - Deployment dependencies for Streamlit Cloud.
-*   `FUNAAB_Helpdesk_Analysis.ipynb` - The original Jupyter Notebook analysis.
+### Live Presentation Features
+This application is explicitly built for live demonstration:
+*   **Live Simulator**: Type in mock issues and watch the probability gauge react in real-time.
+*   **One-Click Presets**: Use the "Baseline" and "Deceptive Ticket" buttons for flawless live pitches without typing.
+*   **Explainable AI**: The app explicitly highlights the exact words (e.g., "portal", "gateway", "down") that triggered the model's alert.
+*   **Executive Impact Calculator**: Translates raw machine learning metrics into projected business value (e.g., "Net Operational Hours Saved" per 1,000 tickets).
